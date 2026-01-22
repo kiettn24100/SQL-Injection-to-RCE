@@ -1,0 +1,30 @@
+version: "3"
+
+services:
+  web-sqli:
+    build: .
+    ports:
+      - "4000:80"
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      - db-sqli
+    networks:
+      - rce_network
+
+  db-sqli:
+    image: mysql:5.7
+    command: --secure-file-priv=
+    environment:
+      MYSQL_DATABASE: rce_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: admin
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d
+      - ./src:/var/www/html
+    networks:
+      - rce_network
+
+networks:
+  rce_network:
