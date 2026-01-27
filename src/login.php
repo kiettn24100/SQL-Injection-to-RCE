@@ -15,8 +15,12 @@
     $sql = "SELECT * FROM users WHERE username = '$username' AND password = '$password'";
 
     $result = $conn->query($sql);
+    
+    if ($result === false) {
+    die("Truy vấn thất bại.");
+}
 
-    if($result-> num_rows > 0){
+    if($result->num_rows > 0){
         $message = 'Login thành công';
     }else {
         $message = 'Login thất bại';
