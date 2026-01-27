@@ -1,13 +1,13 @@
 <?php
 
 $nameservice = "localhost"; 
-$username = "admin";  
+$username = "user01";  
 $password = "12345678";
 # $dbname = "sqllab";
 
 # cái image này vì nó không có tự động tạo db nên nếu mà ở đây mình add thêm $dbname vào thì nó sẽ báo lỗi unknow database liền , các bạn có thể tự test , cứ thêm $dbname vào
 # mở kết nối tới db và dùng lệnh thực thi khởi tạo database 
-$conn = new mysqli($nameservice, $username, $password);
+$conn = new mysqli("localhost", "admin", "12345678");
 if ($conn->connect_error) {
     die("Kết nối thất bại: " . $conn->connect_error);
 }
@@ -24,8 +24,8 @@ $conn->select_db("sqllab");
 
 $conn->close();
 sleep(1);
-# kết nối cũ dùng để khởi tạo rồi thì đóng lại và mở kết nối này để kết nối với sqllab dùng cho login.php
-$conn = new mysqli($nameservice, $username, $password);
+# kết nối cũ dùng để khởi tạo database và tạo ra account user01 để phục vụ cho bài lab rồi thì đóng lại và mở kết nối này để kết nối với sqllab dùng cho login.php với user01 
+$conn = new mysqli("localhost", "user01", "12345678");
 if ($conn->connect_error) {
     die("Kết nối lại thất bại: " . $conn->connect_error);
 }
