@@ -2,16 +2,15 @@ version: "3"
 
 services:
   sqli-to-rce:
-    build: .  # build từ cái image trong dockerfile hiện tại 
+    build: . # build từ cái image trong dockerfile hiện tại
     ports:
       - "4000:80"
     environment:
       - MYSQL_ADMIN_USER=admin
       - MYSQL_ADMIN_PASS=12345678
-      - MYSQL_DB_NAME=sqllab
-
-      # khoogn cần thiết phải volume ở đây , cho bạn hack nát cái server thì khi bạn restart lại thì nó lại trở về như ban đầu
-
-      # bởi nếu volume vào thư mục của máy tính bạn thì những gì bạn thực hiện trong container thì nó sẽ lưu lại vào thư mục máy tính 
-
-
+      # - MYSQL_DB_NAME=sqllab
+      # cái image này nó không hỗ trợ việc tự tạo tên database là sqllab nên mình comment nó đi 
+    volumes:
+      - ./src:/var/www/html  # bê code từ folder ./src của máy thật vào trong folder /var/www/html của container docker
+      - ./db/init.sql:/var/www/html/init.sql # bê code ./db/init.sql vào trong folder /var/www/html/inti.sql của container docker 
+      # quy trình chạy code từ cái docker-compose.yml này sẽ chạy đầu tiên , tạo bộ khung của code rồi mới chạy 
