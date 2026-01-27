@@ -89,15 +89,15 @@ Biến `secure_file_priv` . Biến này được tạo ra để giới hạn cá
 
 Biến `secure_file_priv` có thể được thiết lập như sau:
 
- - Nếu để trống , biến này sẽ không có tác dụng , tức là tất cả mọi người dù có là ai thì đều có thể thực hiện được những câu lệnh `SELECT .... INTO OUTFILE ....` kia vốn dĩ chỉ dành cho root
+ - Nếu để trống , biến này sẽ không có tác dụng , tức là tất cả mọi người dù có là ai thì đều có thể thực hiện được việc ghi file , chèn file vào bất cứ folder nào 
 
  - Nếu được thiết lập bằng với tên của một thư mục , thì lúc này MySQL nó sẽ quy định all user chỉ có thể nhập xuất dữ liệu với các tệp trong thư mục đó 
 
- - Nếu để bằng với NULL , thì MySQL sẽ vô hiệu hóa các thao tác nhập xuất dữ liệu 
+ - Nếu để bằng với NULL , thì MySQL sẽ vô hiệu hóa các thao tác nhập xuất dữ liệu , kể cả khi bạn có quyền root nhưng cái biến này bằng NULL thì bạn cũng không có quyền ghi file vào trong bất cứ folder nào 
 
 (Nguồn: https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_secure_file_priv)
 
-Vậy thì như đã nói trên , để có thể dùng được câu lệnh `SELECT .... INTO OUTFILE ....` RCE được thì buộc điều kiện cái biến `secure_file_priv` nó phải là trống hoặc phải bằng với tên thư mục mình cần ghi File vào đó
+Vậy thì như đã nói trên , để có thể thực hiện việc ghi file RCE được thì buộc điều kiện cái biến `secure_file_priv` nó phải là trống hoặc phải bằng với tên thư mục mình cần ghi File vào đó
 
 ----
 
@@ -121,7 +121,19 @@ Và tương tự , Ở đây chúng ta cần `Mysql` thực hiện ghi file vào
 
 Lưu í ở đây nữa , nếu chỉ cần other là số 7 thì chưa hết được , có thể các bạn thắc mắc vậy thì Owner là số 4 cũng được mà đúng ko ? Nhưng khi Owner là số 4 , ở trong thư mục /var/www/html , Web Server nó là Owner , nếu nó chỉ có quyền đọc thì làm sao mà có thể thực thi được đúng ko ? Vậy thì bây giờ Owner cần Read và Execute , Group thì cái gì cũng được, Còn Other thì phải có quyền Write và Execute (Nhắc lại đây là quyền đối với một Folder nhá)
 
+
 **ĐIỀU KIỆN THỨ 3: Set quyền đối với folder /var/www/html là 777 hoặc 503 hoặc 753 ,.... đều được**
+
+----
+
+Chúng ta đã có quyền chèn file vào folder `/var/www/html` , có `secure_file_priv` = rỗng tức là có thêm quyền ghi file vào bất cứ folder nào rồi 
+
+Nhưng vẫn chưa đủ , được quyền ghi file vào bất cứ folder nào nhưng liệu có quyền thực hiện lệnh ghi file không mới là vấn đề 
+
+Giống như việc , khi bạn là user thường , thì bạn chỉ có quyền thực hiện các lệnh như SELECT , UPDATE , DELETE bình thường thôi . Còn cái `SELECT .... INTO OUTFILE ...` kia thì chỉ dành cho người có quyền cao hơn trong hệ thống 
+
+Nói tóm lại: **ĐIỀU KIỆN THỨ 4: BẠN CÓ QUYỀN ROOT HOẶC NẾU LÀ USER THƯỜNG THỈ PHẢI ĐƯỢC CẤP QUYỀN THỰC HIỆN CÁC CÂU LỆNH TỐI CAO ĐÓ**
+
 
 
 
