@@ -1,14 +1,15 @@
 <?php
 
-$nameservice = "sqli-to-rce"; 
-$username = "admin";  # <--- do ở đây cấp quyền root
+$nameservice = "localhost"; 
+$username = "admin";  
 $password = "12345678";
-$dbname = "rcelab";
+$dbname = "sqllab";
 
 $conn = new mysqli($nameservice, $username, $password, $dbname);
 
 if ($conn->connect_error) {
     die("connect failed". $conn->connect_error);
 }
+
 
 
