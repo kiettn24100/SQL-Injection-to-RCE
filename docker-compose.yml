@@ -5,7 +5,12 @@ services:
     build: .  # build từ cái image trong dockerfile hiện tại 
     ports:
       - "4000:80"
+    environments:
+      - MYSQL_ADMIN_USER=admin
+      - MYSQL_ADMIN_PASS=12345678
+      - MYSQL_DB_NAME=sqllab
 
       # khoogn cần thiết phải volume ở đây , cho bạn hack nát cái server thì khi bạn restart lại thì nó lại trở về như ban đầu
 
       # bởi nếu volume vào thư mục của máy tính bạn thì những gì bạn thực hiện trong container thì nó sẽ lưu lại vào thư mục máy tính 
+
