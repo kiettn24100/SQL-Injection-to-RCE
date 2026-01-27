@@ -132,7 +132,32 @@ Nhưng vẫn chưa đủ , được quyền ghi file vào bất cứ folder nào
 
 Giống như việc , khi bạn là user thường , thì bạn chỉ có quyền thực hiện các lệnh như SELECT , UPDATE , DELETE bình thường thôi . Còn cái `SELECT .... INTO OUTFILE ...` kia thì chỉ dành cho người có quyền cao hơn trong hệ thống 
 
-Nói tóm lại: **ĐIỀU KIỆN THỨ 4: BẠN CÓ QUYỀN ROOT HOẶC NẾU LÀ USER THƯỜNG THỈ PHẢI ĐƯỢC CẤP QUYỀN THỰC HIỆN CÁC CÂU LỆNH TỐI CAO ĐÓ**
+Cái mà mình nói tới ở đây là quyền `FILE` trong MySQL . Trong MySQL , nó chia ra làm 3 loại quyền: 
+
+- Thứ nhất là quyền quản trị , quản lí toàn bộ máy chủ Mysql
+
+- Thứ hai là quyền truy cập cơ sở dữ liệu
+
+- Thứ ba là quyền truy cập từng đối tượng trong cơ sở dữ liệu
+
+(nguồn: https://dev.mysql.com/doc/refman/9.1/en/privileges-provided.html#privileges-provided-guidelines)
+Thì cái quyền `FILE` nó thuộc nhóm quyền quản trị đó , những câu lệnh truy vấn mà chứa từ `SELECT` , `INSERT` , ... bạn cứ hiểu nôm na đó là quyền `SELECT` , quyền `INSERT` .
+
+Ở đây sẽ có những quyền nó được cố định luôn luôn thuộc một nhóm nhất định , tức là , giả sử cái quyền `SELECT` đó , nó có thể thuộc nhóm 1 , 2 hoặc 3 tùy vào cách nó được set , user chỉ được làm việc với đúng mỗi bảng , thì quyền `SELECT` nó chỉ ở nhóm 3 , nếu user chỉ được làm việc đúng với mỗi cái `database` thì quyền `SELECT` ở nhóm 2
+
+Và cái nhóm 1 - quyền quản trị , những quyền nằm trong đó theo MySQL quy định chỉ được phép tồn tại ở nhóm 1 , không thể ép nó xuống 2 hoặc 3 được . Quyền `FILE` mà chúng ta đang nói tới cũng như thế 
+
+Vậy quyền `FILE` nó có những khả năng gì ? Theo nguồn này : https://dev.mysql.com/doc/refman/9.1/en/privileges-provided.html#priv_file
+
+- cho phép đọc và ghi file bằng cách sử dụng các hàm như `LOAD DATA()` , câu lệnh `SELECT ... INTO OUTFILE ...` và hàm `LOAD_FILE()` . Người dùng có đặc quyền `FILE` có thể đọc bất kỳ tệp nào trên máy chủ
+
+- cho phép tạo các tệp mới trong bất kỳ thư mục nào mà máy chủ MySQL có quyền ghi
+
+- Cho phép sử dụng tùy chọn bảng DATA DIRECTORY hoặc INDEX DIRECTORY cho CREATE TABLE câu lệnh.
+
+Các bạn cứ hiểu ngắn gọn là nó cho phép đọc file , ghi file vào những folder mà MYSQL có quyền ghi , và điều hướng thay đổi cái vị trí lưu trữ dữ liệu vật lý tức là giả sử dữ liệu trong database nó thường được lưu ở /var/lib//mysql nhưng bạn điều hướng những dữ liệu đó đến một folder , một ổ cứng khác làm tràn dữ liệu => sập hệ thống 
+
+Nói tóm lại: **ĐIỀU KIỆN THỨ 4: BẠN PHẢI LÀ ROOT HOẶC NẾU LÀ USER THƯỜNG THỈ BẠN PHẢI CÓ QUYỀN FILE**
 
 
 
